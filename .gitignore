@@ -11,3 +11,4 @@ node_modules/
 ssc.json
 ssc-*.json
 Web.config
+package-lock.json
