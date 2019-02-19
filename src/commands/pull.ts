@@ -110,6 +110,7 @@ function scriptFiles(config: Config, results: any[]): void {
       .map(value => ({ name: value, type: 'SCHEMA' }));
 
   let procs: ObjectRecordSet[] = objects.filter(x => x.type.trim() == 'P');
+  let fns: ObjectRecordSet[] = objects.filter(x=> x.type.trim() == 'FN' || x.type.trim() == 'TF' || x.type.trim() == 'IF');
 
   //write a prep file that drops foreign keys, if they exist
   if (foreignKeys.length > 0) {
@@ -215,6 +216,24 @@ function scriptFiles(config: Config, results: any[]): void {
 
       exclude(config, existing, dir);
   }
+
+  if (fns.length > 0) {
+    let content: string = '';
+    const fnPrepFile: string = util.safeFile(`DropFunctions.sql`);
+    fns.forEach(item => {
+        const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
+
+        if (!include(config.files, file)) {
+            return;
+        }
+
+        content += script.dropFunction(item);
+    });
+
+    const dir: string = createPrepFile(config, fnPrepFile, content);
+
+    exclude(config, existing, dir);
+}
 
   // write files for schemas
   schemas.forEach(item => {

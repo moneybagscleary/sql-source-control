@@ -499,6 +499,26 @@ export function dropProcedure(item: AbstractRecordSet): string {
 }
 
 /**
+ * Get script to drop existing functions
+ *
+ * @param item Row from `sys.objects` query.
+ */
+export function dropFunction(item: AbstractRecordSet): string {
+    let output: string = [
+        `IF EXISTS (SELECT * FROM sys.objects o `,
+        `           INNER JOIN sys.schemas s on o.schema_id = s.schema_id `,
+        `           WHERE o.name = '${item.name}' and s.name = '${item.schema}')`,
+        'BEGIN',
+        `  DROP FUNCTION [${item.schema}].[${item.name}]`,
+        'END',
+        'GO',
+        EOL].join(EOL);
+
+    return output;
+}
+
+
+/**
  * Get script to drop existing constraint.
  *
  * @param item Row from `sys.default_constraints` query.
