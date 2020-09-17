@@ -14,5 +14,5 @@ export class Connection {
   public port?: number = 1433;
   public user: string = '';
   public password: string = '';
-  public synonym_target: string = '';
+  public synonymTarget: string = '';
 }

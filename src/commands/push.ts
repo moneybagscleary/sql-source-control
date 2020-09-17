@@ -20,14 +20,14 @@ export function push(name?: string): void {
 
   console.log(`Pushing to ${chalk.magenta(conn.database)} on ${chalk.magenta(conn.server)} ...`);
 
-  let content = util.getAllFilesContent()
+  let content: string = util.getAllFilesContent(true);
 
   let promise: Promise<sql.ConnectionPool> = new sql.ConnectionPool(conn).connect();
   if (content.includes('{synonym_target}')) {
-      content = content.replace(new RegExp('{synonym_target}', 'g'), conn.synonym_target);
+      content = content.replace(new RegExp('{synonym_target}', 'g'), conn.synonymTarget);
   }
 
-  let statements: string[] = content.split('GO' + EOL);
+  const statements: string[] = content.split('GO' + EOL);
 
   statements.forEach(statement => {
       promise = promise.then(pool => {
@@ -39,6 +39,10 @@ export function push(name?: string): void {
     .then(() => {
       const time: [number, number] = process.hrtime(start);
       console.log(chalk.green(`Finished after ${time[0]}s!`));
+      process.exit(0);
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+        console.error(err);
+        process.exit(3);
+    });
 }

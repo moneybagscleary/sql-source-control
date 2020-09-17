@@ -49,7 +49,7 @@ export const configDefaults: Config = {
     'ft-stoplist': './storage/ft-stoplists',
     'ft-index': './storage/ft-indexes',
     'constraints': './default-constraints',
-    'synonyms': './synonyms',
+    'synonyms': './synonyms'
   },
   idempotency: {
     'procs': 'if-exists-drop',
@@ -218,21 +218,95 @@ export function getConnsConfigConns(file?: string): Connection[] {
   return config.connections as Connection[];
 }
 
+export function getAllFilesContentFull(): string {
+  const config: Config = getConfig();
+  let output: string = '';
 
-export function getAllFilesContent(): string {
+  // order is important
+  const files: string[] = getAllFilesOrdered(config);
+
+
+  files.forEach((file, i) => {
+    const content: string = fs.readFileSync(file).toString();
+    output += content;
+    output += EOL;
+    output += EOL;
+  });
+
+  return output;
+}
+
+export function getAllFilesContent(asTransaction: boolean = false): string {
     const config: Config = getConfig();
     let output: string = '';
 
     // order is important
     const files: string[] = getFilesOrdered(config);
+    const preTransactionFiles: string[] = getPreTransactionFiles(config);
+    const postTransactionFiles: string[] = getPostTransactionFiles(config);
 
-    files.forEach(file => {
-        const content: string = fs.readFileSync(file).toString();
-
-        output += content;
-        output += EOL;
-        output += EOL;
+    preTransactionFiles.forEach((file) => {
+      const content: string = fs.readFileSync(file).toString();
+      output += content;
+      output += EOL;
+      output += EOL;
     });
+
+    if (asTransaction) {
+      output += [
+        'SET TRANSACTION ISOLATION LEVEL Serializable',
+        'GO',
+        'BEGIN TRANSACTION',
+        'GO',
+        EOL
+      ].join(EOL);
+    }
+
+    files.forEach((file, i) => {
+      const content: string = fs.readFileSync(file).toString();
+      output += content;
+      output += EOL;
+      output += EOL;
+    });
+
+    if (asTransaction) {
+      output += 'COMMIT TRANSACTION';
+      output += EOL;
+      output += 'GO';
+      output += EOL;
+      output += EOL;
+    }
+
+    postTransactionFiles.forEach((file) => {
+      const content: string = fs.readFileSync(file).toString();
+      output += content;
+      output += EOL;
+      output += EOL;
+    });
+
+    if (asTransaction) {
+      output += [
+        '-- This statement writes to the SQL Server Log so SQL Monitor can show this deployment.',
+        'IF HAS_PERMS_BY_NAME(N\'sys.xp_logevent\', N\'OBJECT\', N\'EXECUTE\') = 1',
+        'BEGIN',
+        '    DECLARE @databaseName AS nvarchar(2048), @eventMessage AS nvarchar(2048)',
+        `    SET @databaseName = REPLACE(REPLACE(DB_NAME(), N'\', N'\\'), N'"', N'\"')`,
+        `    SET @eventMessage = N'SQL Source Control: { "deployment": { "description": "SQL Source Control deployed to ' + @databaseName + N'", "database": "' + @databaseName + N'" }}'`,
+        '    EXECUTE sys.xp_logevent 55000, @eventMessage',
+        'END',
+        'GO',
+        'DECLARE @Success AS BIT',
+        'SET @Success = 1',
+        'SET NOEXEC OFF',
+        `IF (@Success = 1) PRINT 'The database update succeeded'`,
+        'ELSE BEGIN',
+        '  IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION',
+        `  PRINT 'The database update failed'`,
+        'END',
+        'GO',
+        EOL
+      ].join(EOL);
+    }
 
     return output;
 }
@@ -246,21 +320,76 @@ export function getFilesOrdered(config: Config): string[] {
   const output: string[] = [];
   const directories: string[] = [
     config.output.prep,
-    config.output.schemas,
-    config.output['ft-catalog'],
-    config.output['ft-stoplist'],
     config.output.synonyms,
     config.output['table-valued-parameters'],
     config.output['scalar-valued'],
     config.output['table-valued'],
-    config.output.tables,    
+    config.output.tables,
     config.output.views,
     config.output.constraints,
-    config.output['ft-index'],
-    config.output.procs,    
+    config.output.procs,
     config.output.triggers,
     config.output.data,
     config.output.foreignKeys,
+  ];
+
+  directories.forEach(dir => {
+    const files: string[] = glob.sync(`${config.output.root}/${dir}/**/*.sql`);
+    output.push(...files);
+  });
+
+  return output;
+}
+
+export function getAllFilesOrdered(config: Config): string[] {
+  const output: string[] = [];
+  const directories: string[] = [
+    config.output.schemas,
+    config.output['ft-catalog'],
+    config.output['ft-stoplist'],
+    config.output.prep,
+    config.output.synonyms,
+    config.output['table-valued-parameters'],
+    config.output['scalar-valued'],
+    config.output['table-valued'],
+    config.output.tables,
+    config.output['ft-index'],
+    config.output.views,
+    config.output.constraints,
+    config.output.procs,
+    config.output.triggers,
+    config.output.data,
+    config.output.foreignKeys,
+  ];
+
+  directories.forEach(dir => {
+    const files: string[] = glob.sync(`${config.output.root}/${dir}/**/*.sql`);
+    output.push(...files);
+  });
+
+  return output;
+}
+
+export function getPostTransactionFiles(config: Config): string[] {
+  const output: string[] = [];
+  const directories: string[] = [
+    config.output['ft-index'],
+  ];
+
+  directories.forEach(dir => {
+    const files: string[] = glob.sync(`${config.output.root}/${dir}/**/*.sql`);
+    output.push(...files);
+  });
+
+  return output;
+}
+
+export function getPreTransactionFiles(config: Config): string[] {
+  const output: string[] = [];
+  const directories: string[] = [
+    config.output.schemas,
+    config.output['ft-catalog'],
+    config.output['ft-stoplist'],
   ];
 
   directories.forEach(dir => {
@@ -286,7 +415,7 @@ function parseConnString(name: string, connString: string): Connection {
   let user: string = parts.find(x => /^(uid)/ig.test(x));
   let password: string = parts.find(x => /^(password|pwd)/ig.test(x));
   let port: number;
-  let synonym_target: string = "";
+  const synonymTarget: string = '';
 
   // get values
   server = (server && server.split('=')[1]);
@@ -310,6 +439,6 @@ function parseConnString(name: string, connString: string): Connection {
     port,
     user,
     password,
-    synonym_target
+    synonymTarget
   });
 }

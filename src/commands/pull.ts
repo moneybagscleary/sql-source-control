@@ -13,22 +13,36 @@ import * as util from '../common/utility';
 import {
   ColumnRecordSet,
   DataRecordSet,
+  DefaultConstraintRecordSet,
   ForeignKeyRecordSet,
+  FullTextCatalogRecordSet,
+  FullTextIndexRecordSet,
+  FullTextStopListRecordSet,
+  FullTextStopWordRecordSet,
   IndexRecordSet,
   ObjectRecordSet,
   PrimaryKeyRecordSet,
   SchemaRecordSet,
-  TableRecordSet,
-  TvpRecordSet,
-  FullTextCatalogRecordSet,
-  FullTextStopListRecordSet,
-  FullTextStopWordRecordSet,
-  DefaultConstraintRecordSet,
   SynonymRecordSet,
-  FullTextIndexRecordSet
+  TableRecordSet,
+  TvpRecordSet
 } from '../sql/record-set';
 import * as script from '../sql/script';
-import { columnRead, foreignKeyRead, indexRead, objectRead, primaryKeyRead, tableRead, tvpRead, fullTextCatalogRead, fullTextStopListRead, fullTextStopWordsRead, defaultConstraintsRead, synonymsRead, fullTextIndexRead } from '../sql/sys';
+import {
+    columnRead,
+    defaultConstraintsRead,
+    foreignKeyRead,
+    fullTextCatalogRead,
+    fullTextIndexRead,
+    fullTextStopListRead,
+    fullTextStopWordsRead,
+    indexRead,
+    objectRead,
+    primaryKeyRead,
+    synonymsRead,
+    tableRead,
+    tvpRead
+} from '../sql/sys';
 
 /**
  * Generate SQL files for all tables, stored procedures, functions, etc.
@@ -74,8 +88,12 @@ export function pull(name: string): void {
     .then(() => {
       const time: [number, number] = process.hrtime(start);
       console.log(chalk.green(`Finished after ${time[0]}s!`));
+      process.exit(0);
     })
-    .catch(err => console.error(err));
+    .catch(err => {
+        console.error(err);
+        process.exit(3);
+    });
 }
 
 /**
@@ -109,13 +127,15 @@ function scriptFiles(config: Config, results: any[]): void {
     .filter((value, index, array) => array.indexOf(value) === index)
       .map(value => ({ name: value, type: 'SCHEMA' }));
 
-  let procs: ObjectRecordSet[] = objects.filter(x => x.type.trim() == 'P');
-  let fns: ObjectRecordSet[] = objects.filter(x=> x.type.trim() == 'FN' || x.type.trim() == 'TF' || x.type.trim() == 'IF');
+  const procs: ObjectRecordSet[] = objects.filter(x => x.type.trim() === 'P');
+  const fns: ObjectRecordSet[] = objects.filter(x =>
+    x.type.trim() === 'FN' || x.type.trim() === 'TF' || x.type.trim() === 'IF'
+  );
 
-  //write a prep file that drops foreign keys, if they exist
+  // write a prep file that drops foreign keys, if they exist
   if (foreignKeys.length > 0) {
       let content: string = '';
-      const fkPrepFile: string = util.safeFile(`DropForeignKeys.sql`);
+      const fkPrepFile: string = util.safeFile('DropForeignKeys.sql');
       foreignKeys.forEach(item => {
           const file: string = util.safeFile(`${item.constraint_schema}.${item.constraint_table}.sql`);
 
@@ -133,7 +153,7 @@ function scriptFiles(config: Config, results: any[]): void {
 
   if (synonyms.length > 0) {
       let content: string = '';
-      const syPrepFile: string = util.safeFile(`DropSynonyms.sql`);
+      const syPrepFile: string = util.safeFile('DropSynonyms.sql');
       synonyms.forEach(item => {
           const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
 
@@ -149,10 +169,10 @@ function scriptFiles(config: Config, results: any[]): void {
       exclude(config, existing, dir);
   }
 
-  //write a prep file that drops constraints, if they exist
+  // write a prep file that drops constraints, if they exist
   if (defaultConstraints.length > 0) {
       let content: string = '';
-      const dcPrepFile: string = util.safeFile(`DropConstraints.sql`);
+      const dcPrepFile: string = util.safeFile('DropConstraints.sql');
       defaultConstraints.forEach(item => {
           const file: string = util.safeFile(`${item.schema}.${item.table_name}.sql`);
 
@@ -168,10 +188,10 @@ function scriptFiles(config: Config, results: any[]): void {
       exclude(config, existing, dir);
   }
 
-  //write a prep file that drops full text catalogs, if they exist
-  if (ftCatalogs.length > 0) {
+  // write a prep file that drops full text catalogs, if they exist
+  /* if (ftCatalogs.length > 0) {
       let content: string = '';
-      const ftPrepFile: string = util.safeFile(`DropFullTextIndexes&Catalogs.sql`);
+      const ftPrepFile: string = util.safeFile('DropFullTextIndexes&Catalogs.sql');
 
       fullTextIndexes.forEach(item => {
           const file: string = util.safeFile(`${item.scheme}.${item.table_name}.sql`);
@@ -196,12 +216,12 @@ function scriptFiles(config: Config, results: any[]): void {
       const dir: string = createPrepFile(config, ftPrepFile, content);
 
       exclude(config, existing, dir);
-  }
+  } */
 
-  //write a prep file that drops procedures, if they exist
+  // write a prep file that drops procedures, if they exist
   if (procs.length > 0) {
       let content: string = '';
-      const procPrepFile: string = util.safeFile(`DropProcedures.sql`);
+      const procPrepFile: string = util.safeFile('DropProcedures.sql');
       procs.forEach(item => {
           const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
 
@@ -219,7 +239,7 @@ function scriptFiles(config: Config, results: any[]): void {
 
   if (fns.length > 0) {
     let content: string = '';
-    const fnPrepFile: string = util.safeFile(`DropFunctions.sql`);
+    const fnPrepFile: string = util.safeFile('DropFunctions.sql');
     fns.forEach(item => {
         const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
 
@@ -256,7 +276,7 @@ function scriptFiles(config: Config, results: any[]): void {
       return;
     }
 
-    let content = script.getStatement(item);
+    const content: string = script.getStatement(item);
 
     const dir: string = createFile(config, item, file, content);
     exclude(config, existing, dir);
@@ -267,11 +287,11 @@ function scriptFiles(config: Config, results: any[]): void {
       const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
       const existingFile: string = path.join(config.output.root, config.output.tables, file);
 
-      if (config.idempotency.tables == 'if-not-exists' && fs.existsSync(existingFile)) {
+      if (config.idempotency.tables === 'if-not-exists' && fs.existsSync(existingFile)) {
           let content: string = fs.readFileSync(existingFile).toString();
 
           content = script.updateTable(content, item, columns);
-          const dir: string = createSpecialFile(config, file, content, "update-table");
+          const dir: string = createSpecialFile(config, file, content, 'update-table');
           exclude(config, existing, dir);
       } else {
           if (!include(config.files, file)) {
@@ -292,7 +312,7 @@ function scriptFiles(config: Config, results: any[]): void {
       return;
     }
 
-    const content: string = script.tvp(item, columns);
+    const content: string = script.tvp(item, columns, primaryKeys);
     const dir: string = createFile(config, item, file, content);
     exclude(config, existing, dir);
   });
@@ -305,11 +325,11 @@ function scriptFiles(config: Config, results: any[]): void {
       return;
     }
 
-    let table: TableRecordSet = tables.find(x => (x.schema + "." + x.name) == item.name);
-    let columnList: ColumnRecordSet[] = table ? columns.filter(a => a.object_id == table.object_id) : null;    
-    let has_identity_column: boolean = columnList ? !!columnList.find(b => b.is_identity) : false;
+    const table: TableRecordSet = tables.find(x => (x.schema + '.' + x.name) === item.name);
+    const columnList: ColumnRecordSet[] = table ? columns.filter(a => a.object_id === table.object_id) : null;
+    const hasIdentityColumn: boolean = columnList ? !!columnList.find(b => b.is_identity) : false;
 
-    const content: string = script.data(item, has_identity_column);
+    const content: string = script.data(item, hasIdentityColumn);
     const dir: string = createFile(config, item, file, content);
     exclude(config, existing, dir);
   });
@@ -317,7 +337,7 @@ function scriptFiles(config: Config, results: any[]): void {
   // write a file that applies all foreign keys
   if (foreignKeys.length > 0) {
       let content: string = '';
-      const fkPostFile: string = util.safeFile(`ApplyForeignKeys.sql`);
+      const fkPostFile: string = util.safeFile('ApplyForeignKeys.sql');
       foreignKeys.forEach(item => {
           const file: string = util.safeFile(`${item.constraint_schema}.${item.constraint_table}.sql`);
 
@@ -328,7 +348,7 @@ function scriptFiles(config: Config, results: any[]): void {
           content += script.foreignKey(item);
       });
 
-      const dir: string = createSpecialFile(config, fkPostFile, content, "fk");
+      const dir: string = createSpecialFile(config, fkPostFile, content, 'fk');
 
       exclude(config, existing, dir);
   }
@@ -336,7 +356,7 @@ function scriptFiles(config: Config, results: any[]): void {
   // write a file that applies all foreign keys
   if (defaultConstraints.length > 0) {
       let content: string = '';
-      const dcPostFile: string = util.safeFile(`ApplyConstraints.sql`);
+      const dcPostFile: string = util.safeFile('ApplyConstraints.sql');
       defaultConstraints.forEach(item => {
           const file: string = util.safeFile(`${item.schema}.${item.table_name}.sql`);
 
@@ -347,7 +367,7 @@ function scriptFiles(config: Config, results: any[]): void {
           content += script.constraint(item);
       });
 
-      const dir: string = createSpecialFile(config, dcPostFile, content, "constraint");
+      const dir: string = createSpecialFile(config, dcPostFile, content, 'constraint');
 
       exclude(config, existing, dir);
   }
@@ -361,7 +381,7 @@ function scriptFiles(config: Config, results: any[]): void {
               return;
           }
 
-          const dir: string = createSpecialFile(config, file, content, "ft-catalog");
+          const dir: string = createSpecialFile(config, file, content, 'ft-catalog');
           exclude(config, existing, dir);
       });
   }
@@ -375,14 +395,14 @@ function scriptFiles(config: Config, results: any[]): void {
               return;
           }
 
-          const dir: string = createSpecialFile(config, file, content, "ft-stoplist");
+          const dir: string = createSpecialFile(config, file, content, 'ft-stoplist');
           exclude(config, existing, dir);
       });
   }
 
   if (synonyms.length > 0) {
       let content: string = '';
-      const syPostFile: string = util.safeFile(`ApplySynonyms.sql`);
+      const syPostFile: string = util.safeFile('ApplySynonyms.sql');
       synonyms.forEach(item => {
           const file: string = util.safeFile(`${item.schema}.${item.name}.sql`);
 
@@ -393,14 +413,14 @@ function scriptFiles(config: Config, results: any[]): void {
           content += script.synonym(item);
       });
 
-      const dir: string = createSpecialFile(config, syPostFile, content, "synonyms");
+      const dir: string = createSpecialFile(config, syPostFile, content, 'synonyms');
 
       exclude(config, existing, dir);
   }
 
   if (fullTextIndexes.length > 0) {
       let content: string = '';
-      const ftPostFile: string = util.safeFile(`ApplyFullTextIndexes.sql`);
+      const ftPostFile: string = util.safeFile('ApplyFullTextIndexes.sql');
       fullTextIndexes.forEach(item => {
           const file: string = util.safeFile(`${item.scheme}.${item.table_name}.sql`);
 
@@ -411,7 +431,7 @@ function scriptFiles(config: Config, results: any[]): void {
           content += script.fullTextIndex(item);
       });
 
-      const dir: string = createSpecialFile(config, ftPostFile, content, "ft-index");
+      const dir: string = createSpecialFile(config, ftPostFile, content, 'ft-index');
 
       exclude(config, existing, dir);
   }
@@ -491,14 +511,14 @@ function createFile(config: Config, item: any, file: string, content: string): s
   return dir;
 }
 
-function createPrepFile(config: Config, file: string, content: string) {
+function createPrepFile(config: Config, file: string, content: string): string {
     let dir: string;
-    let output: string = config.output.prep;
-    
+    const output: string = config.output.prep;
+
     if (output) {
         // get full output path
         dir = path.join(config.output.root, output, file);
-        
+
         // create file
         console.log(`Creating ${chalk.cyan(dir)} ...`);
         fs.outputFileSync(dir, content.trim());
@@ -507,33 +527,33 @@ function createPrepFile(config: Config, file: string, content: string) {
     return dir;
 }
 
-function createSpecialFile(config: Config, file: string, content: string, type: string) {
+function createSpecialFile(config: Config, file: string, content: string, type: string): string {
     let dir: string;
     let output: string;
 
     switch (type) {
-        case ("constraint"):
+        case ('constraint'):
             output = config.output.constraints;
             break;
-        case ("fk"):
+        case ('fk'):
             output = config.output.foreignKeys;
             break;
-        case ("ft-catalog"):
+        case ('ft-catalog'):
             output = config.output['ft-catalog'];
             break;
-        case ("ft-stoplist"):
+        case ('ft-stoplist'):
             output = config.output['ft-stoplist'];
             break;
-        case ("synonyms"):
+        case ('synonyms'):
             output = config.output.synonyms;
             break;
-        case ("ft-index"):
+        case ('ft-index'):
             output = config.output['ft-index'];
             break;
-        case ("update-table"):
+        case ('update-table'):
             output = config.output.tables;
             break;
-    };
+    }
 
     if (output) {
         // get full output path

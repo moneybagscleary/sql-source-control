@@ -101,31 +101,31 @@ select
   fk.name,
   STUFF((SELECT ',' + QUOTENAME(c.name)
    -- get all the columns in the constraint table
-    FROM sys.columns AS c 
-    INNER JOIN sys.foreign_key_columns AS fkc 
+    FROM sys.columns AS c
+    INNER JOIN sys.foreign_key_columns AS fkc
     ON fkc.parent_column_id = c.column_id
     AND fkc.parent_object_id = c.[object_id]
     WHERE fkc.constraint_object_id = fk.[object_id]
-    ORDER BY fkc.constraint_column_id 
+    ORDER BY fkc.constraint_column_id
     FOR XML PATH(N''), TYPE).value(N'.[1]', N'nvarchar(max)'), 1, 1, N'') as [constraint_columns],
   rs.name as [ref_schema],
   rt.name as [ref_table],
   STUFF((SELECT ',' + QUOTENAME(c.name)
    -- get all the referenced columns
-    FROM sys.columns AS c 
-    INNER JOIN sys.foreign_key_columns AS fkc 
+    FROM sys.columns AS c
+    INNER JOIN sys.foreign_key_columns AS fkc
     ON fkc.referenced_column_id = c.column_id
     AND fkc.referenced_object_id = c.[object_id]
     WHERE fkc.constraint_object_id = fk.[object_id]
-    ORDER BY fkc.constraint_column_id 
+    ORDER BY fkc.constraint_column_id
     FOR XML PATH(N''), TYPE).value(N'.[1]', N'nvarchar(max)'), 1, 1, N'') as [ref_columns],
-  case 
+  case
 	when fk.delete_referential_action = 1 then 'ON DELETE CASCADE'
 	when fk.delete_referential_action = 2 then 'ON DELETE SET NULL'
 	when fk.delete_referential_action = 3 then 'ON DELETE SET DEFAULT'
 	when fk.delete_referential_action = 0 then ''
   end as [delete_referential_action],
-  case 
+  case
 	when fk.update_referential_action = 1 then 'ON UPDATE CASCADE'
 	when fk.update_referential_action = 2 then 'ON UPDATE SET NULL'
 	when fk.update_referential_action = 3 then 'ON UPDATE SET DEFAULT'
@@ -136,11 +136,11 @@ select
 from sys.foreign_keys fk
 inner join sys.tables rt -- referenced table
   on fk.referenced_object_id = rt.[object_id]
-inner join sys.schemas rs 
+inner join sys.schemas rs
   on rt.[schema_id] = rs.[schema_id]
 inner join sys.tables ct -- constraint table
   on fk.parent_object_id = ct.[object_id]
-inner join sys.schemas cs 
+inner join sys.schemas cs
   on ct.[schema_id] = cs.[schema_id]
 where rt.is_ms_shipped = 0 and ct.is_ms_shipped = 0
 order by cs.name, ct.name;
@@ -251,7 +251,7 @@ export const objectRead: string = `
 `;
 
 export const fullTextCatalogRead: string = `
-  select 
+  select
   	ftc.name,
   	case when ftc.is_accent_sensitivity_on = 1 then 'ON' else 'OFF' end as [accent_sensitivity]
   from sys.fulltext_catalogs ftc
@@ -275,7 +275,7 @@ export const fullTextStopWordsRead: string = `
 `;
 
 export const defaultConstraintsRead: string = `
-  select 
+  select
   	  s.name as [schema],
       t.name as [table_name],
       c.name as [column_name],
@@ -289,7 +289,7 @@ export const defaultConstraintsRead: string = `
 `;
 
 export const synonymsRead: string = `
-  select 
+  select
     s.name as [schema],
     sy.name,
     replace(sy.base_object_name, left(sy.base_object_name, charindex('.', sy.base_object_name) - 1), '') as [reference]
@@ -311,7 +311,7 @@ DECLARE @Catalog NVARCHAR(128),
 		@NL CHAR(2),
 		@i int
 
-CREATE TABLE #Results ( 
+CREATE TABLE #Results (
   scheme [nvarchar](max) not null,
   table_name [nvarchar](max) not null,
   sql_value [nvarchar](max) not null
@@ -326,7 +326,7 @@ FROM sys.fulltext_catalogs
 	ORDER BY name
 
 OPEN FTCur
- 
+
 
 FETCH FTCur INTO @Catalog
 
@@ -370,7 +370,7 @@ IF EXISTS
 			ON t.object_id = i.object_id
 		JOIN sys.fulltext_catalogs c
 			ON i.fulltext_catalog_id = c.fulltext_catalog_id
-		WHERE 1 = 1 
+		WHERE 1 = 1
 		AND c.name = @Catalog
 		--AND i.object_id > @ObjectID
 		GROUP BY	u.name
@@ -383,9 +383,8 @@ IF EXISTS
 		FETCH FTObject INTO @ObjectID, @Owner, @Table, @IndexID, @Catalog
 		-- Loop through all fulltext indexes within catalog
 
-				WHILE @@FETCH_status >= 0 
+				WHILE @@FETCH_status >= 0
 				BEGIN
-		
 					-- Script Fulltext Index
 					SELECT
 						@COLS = NULL
@@ -412,7 +411,7 @@ IF EXISTS
 					WHERE i.object_id = @ObjectID
 					AND index_id = @IndexID
 
-					SELECT 
+					SELECT
 						@SQL = @SQL + ', STOPLIST = ' + st.name
 					FROM sys.indexes as i
 					join sys.fulltext_indexes as fi on i.object_id = fi.object_id

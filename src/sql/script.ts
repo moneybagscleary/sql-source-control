@@ -1,23 +1,23 @@
 import { EOL } from 'os';
-import { isBoolean, isDate, isString, isNumber, isNull } from 'ts-util-is';
+import { isBoolean, isDate, isNull, isNumber, isString } from 'ts-util-is';
 
 import { IdempotencyOption } from '../common/idempotency';
 import {
   AbstractRecordSet,
   ColumnRecordSet,
   DataRecordSet,
-  ForeignKeyRecordSet,
-  IndexRecordSet,
-  PrimaryKeyRecordSet,
-  SchemaRecordSet,
-  TableRecordSet,
   DefaultConstraintRecordSet,
+  ForeignKeyRecordSet,
   FullTextCatalogRecordSet,
+  FullTextIndexRecordSet,
   FullTextStopListRecordSet,
   FullTextStopWordRecordSet,
+  IndexRecordSet,
+  ObjectRecordSet,
+  PrimaryKeyRecordSet,
+  SchemaRecordSet,
   SynonymRecordSet,
-  FullTextIndexRecordSet,
-  ObjectRecordSet
+  TableRecordSet
 } from '../sql/record-set';
 
 /**
@@ -60,6 +60,8 @@ export function idempotency(item: AbstractRecordSet, type: IdempotencyOption): s
     // if exists drop
     if (item.type === 'TT') {
       return [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `PRINT ('CREATING ${obj} [${item.schema}].[${item.name}]')`,
         'IF EXISTS (',
         '    SELECT * FROM sys.table_types AS t',
@@ -72,6 +74,8 @@ export function idempotency(item: AbstractRecordSet, type: IdempotencyOption): s
       ].join(EOL);
     } else {
       return [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `PRINT ('CREATING ${obj} [${item.schema}].[${item.name}]')`,
         `IF EXISTS (SELECT * FROM sys.objects WHERE object_id = object_id('[${objectId}]') AND type = '${item.type}')`,
         `DROP ${obj} [${objectId}]`,
@@ -83,6 +87,8 @@ export function idempotency(item: AbstractRecordSet, type: IdempotencyOption): s
     // if not exists
     if (item.type === 'TT') {
       return [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `PRINT ('CREATING ${obj} [${item.schema}].[${item.name}]')`,
         'IF NOT EXISTS (',
         '    SELECT * FROM sys.table_types AS t',
@@ -93,7 +99,8 @@ export function idempotency(item: AbstractRecordSet, type: IdempotencyOption): s
       ].join(EOL);
     } else {
       return [
-        // tslint:disable-next-line:max-line-length
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `PRINT ('CREATING ${obj} [${item.schema}].[${item.name}]')`,
         `IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = object_id('[${objectId}]') AND type = '${item.type}')`,
         ''
@@ -149,19 +156,19 @@ export function table(
       output += EOL;
     });
 
-  let pks: PrimaryKeyRecordSet[] = primaryKeys
+  const pks: PrimaryKeyRecordSet[] = primaryKeys
       .filter(x => x.object_id === item.object_id);
 
   // primary keys
   if (pks.length > 0) {
-      let pk: PrimaryKeyRecordSet = pks[0];
-      output += ` CONSTRAINT [${pk.name}] PRIMARY KEY ${pk.indextype}`
-      output += EOL;      
+      const pk: PrimaryKeyRecordSet = pks[0];
+      output += ` CONSTRAINT [${pk.name}] PRIMARY KEY ${pk.indextype}`;
+      output += EOL;
       output += '(' + EOL;
 
-      for (var i = 0; i < pks.length; i++) {       
-          let pk: PrimaryKeyRecordSet = pks[i];
-          output += '    ' + primaryKey(pk);
+      for (let i: number = 0; i < pks.length; i++) {
+          const pkRef: PrimaryKeyRecordSet = pks[i];
+          output += '    ' + primaryKey(pkRef);
 
           if (pks.length > 1 && i < pks.length - 1) {
               output += ',';
@@ -171,10 +178,10 @@ export function table(
       }
 
       output += `) WITH (PAD_INDEX = ${pk.is_padded}, IGNORE_DUP_KEY = ${pk.ignore_dup_key}, ALLOW_ROW_LOCKS = ${pk.allow_row_locks}, ALLOW_PAGE_LOCKS = ${pk.allow_page_locks}) ON [${pk.filegroup}]`;
-      output += EOL
+      output += EOL;
   }
 
-  //end of create table statement
+  // end of create table statement
   output += `) ON [${item.filegroup}]`;
   output += EOL;
   output += 'GO';
@@ -182,7 +189,7 @@ export function table(
   output += EOL;
 
   if (!item.lock_escalation) {
-      output += `ALTER TABLE [${item.schema}].[${item.name}] SET (LOCK_ESCALATION = DISABLE)`
+      output += `ALTER TABLE [${item.schema}].[${item.name}] SET (LOCK_ESCALATION = DISABLE)`;
       output += EOL;
       output += 'GO';
       output += EOL;
@@ -202,27 +209,27 @@ export function table(
 
 export function updateTable(
     output: string,
-    table: TableRecordSet,
+    tableRef: TableRecordSet,
     columns: ColumnRecordSet[]
 ): string {
-    let objName: string = `[${table.schema}].[${table.name}]`;
+    const objName: string = `[${tableRef.schema}].[${tableRef.name}]`;
 
     columns
-        .filter(x => x.object_id === table.object_id)
+        .filter(x => x.object_id === tableRef.object_id)
         .forEach(col => {
-            let columnValue = column(col);
-            let columnValueExists = output.includes(columnValue);
-            let columnExists = output.includes(col.name);
+            const columnValue: string = column(col);
+            const columnValueExists: boolean = output.includes(columnValue);
+            const columnExists: boolean = output.includes(col.name);
 
             if (columnExists && !columnValueExists) {
-                //alter table alter column
+                // alter table alter column
                 output += [
                     EOL,
                     `ALTER TABLE ${objName} ALTER COLUMN ${columnValue}`,
                     'GO'
                 ].join(EOL);
             } else if (!columnExists) {
-                //alter table add column
+                // alter table add column
                 output += [
                     EOL,
                     `IF NOT EXISTS (select 1 from sys.columns where object_id = object_id('${objName}') and name = '${col.name}')`,
@@ -245,7 +252,8 @@ export function updateTable(
  */
 export function tvp(
   item: TableRecordSet,
-  columns: ColumnRecordSet[]
+  columns: ColumnRecordSet[],
+  primaryKeys: PrimaryKeyRecordSet[]
 ): string {
   let output: string = `CREATE TYPE [${item.schema}].[${item.name}] AS TABLE`;
   output += EOL;
@@ -266,6 +274,31 @@ export function tvp(
       output += EOL;
     });
 
+    const pks: PrimaryKeyRecordSet[] = primaryKeys
+      .filter(x => x.object_id === item.object_id);
+
+  // primary keys
+  if (pks.length > 0) {
+      const pk: PrimaryKeyRecordSet = pks[0];
+      output += ` PRIMARY KEY ${pk.indextype}`;
+      output += EOL;
+      output += '(' + EOL;
+
+      for (let i: number = 0; i < pks.length; i++) {
+          const pkRef: PrimaryKeyRecordSet = pks[i];
+          output += '    ' + primaryKey(pkRef);
+
+          if (pks.length > 1 && i < pks.length - 1) {
+              output += ',';
+          }
+
+          output += EOL;
+      }
+
+      output += `)`;
+      output += EOL;
+  }
+
   output += ')';
   output += EOL;
   output += EOL;
@@ -278,22 +311,22 @@ export function tvp(
  *
  * @param item Results from data query.
  */
-export function data(item: DataRecordSet, has_identity_column: boolean): string {
+export function data(item: DataRecordSet, hasIdentityColumn: boolean): string {
   let output: string = '';
 
   // idempotency
 
-  output += `SET NOCOUNT ON;`;
+  output += 'SET NOCOUNT ON;';
   output += EOL;
 
   output += `TRUNCATE TABLE ${item.name}`;
-  output += EOL;  
+  output += EOL;
 
   output += EOL;
   output += `PRINT ('ADDING ROWS TO ${item.name}')`;
   output += EOL;
 
-  if (has_identity_column) {
+  if (hasIdentityColumn) {
       output += `SET IDENTITY_INSERT ${item.name} ON`;
       output += EOL;
   }
@@ -307,7 +340,7 @@ export function data(item: DataRecordSet, has_identity_column: boolean): string 
     output += EOL;
   });
 
-  if (has_identity_column) {
+  if (hasIdentityColumn) {
       output += `SET IDENTITY_INSERT ${item.name} OFF`;
       output += EOL;
   }
@@ -341,7 +374,7 @@ function safeValue(value: any): any {
   }
 
   if (isNull(value)) {
-    value = `NULL`;
+    value = 'NULL';
   }
 
   return value;
@@ -397,7 +430,7 @@ function column(item: ColumnRecordSet): string {
       if (item.is_identity) {
           output += ` IDENTITY (${item.seed_value || 0}, ${item.increment_value || 1})`;
       }
-  }  
+  }
 
   return output;
 }
@@ -420,7 +453,13 @@ export function foreignKey(item: ForeignKeyRecordSet): string {
   const objectId: string = `${item.constraint_schema}].[${item.constraint_table}`;
   const refObjectId: string = `${item.ref_schema}].[${item.ref_table}`;
 
-  let output: string = `PRINT ('CREATING FOREIGN KEY ${item.name}')`;
+  let output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
+        `PRINT ('CREATING FOREIGN KEY ${item.name}')`,
+        EOL
+    ].join(EOL);
+
   output += EOL;
 
   output += `ALTER TABLE [${objectId}] WITH ${item.check_constraint}`;
@@ -430,7 +469,7 @@ export function foreignKey(item: ForeignKeyRecordSet): string {
 
   if (item.delete_referential_action.length > 0) {
       output += EOL;
-      output += item.delete_referential_action;      
+      output += item.delete_referential_action;
   }
 
   if (item.update_referential_action.length > 0) {
@@ -448,7 +487,7 @@ export function foreignKey(item: ForeignKeyRecordSet): string {
   output += EOL;
   output += EOL;
 
-  let checkValue = item.is_disabled ? 'NOCHECK' : 'CHECK';
+  const checkValue: string = item.is_disabled ? 'NOCHECK' : 'CHECK';
 
   output += `ALTER TABLE [${objectId}] ${checkValue} CONSTRAINT [${item.name}]`;
   output += EOL;
@@ -468,7 +507,9 @@ export function foreignKey(item: ForeignKeyRecordSet): string {
 export function dropForeignKey(item: ForeignKeyRecordSet): string {
     const objectId: string = `${item.constraint_schema}].[${item.constraint_table}`;
 
-    let output: string = [
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `IF EXISTS (SELECT * FROM sys.objects WHERE name = '${item.name}')`,
         'BEGIN',
         `  ALTER TABLE [${objectId}] DROP CONSTRAINT [${item.name}]`,
@@ -485,9 +526,11 @@ export function dropForeignKey(item: ForeignKeyRecordSet): string {
  * @param item Row from `sys.objects` query.
  */
 export function dropProcedure(item: AbstractRecordSet): string {
-    let output: string = [
-        `IF EXISTS (SELECT * FROM sys.objects o `,
-        `           INNER JOIN sys.schemas s on o.schema_id = s.schema_id `,
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
+        'IF EXISTS (SELECT * FROM sys.objects o ',
+        '           INNER JOIN sys.schemas s on o.schema_id = s.schema_id ',
         `           WHERE o.name = '${item.name}' and s.name = '${item.schema}')`,
         'BEGIN',
         `  DROP PROCEDURE [${item.schema}].[${item.name}]`,
@@ -504,9 +547,11 @@ export function dropProcedure(item: AbstractRecordSet): string {
  * @param item Row from `sys.objects` query.
  */
 export function dropFunction(item: AbstractRecordSet): string {
-    let output: string = [
-        `IF EXISTS (SELECT * FROM sys.objects o `,
-        `           INNER JOIN sys.schemas s on o.schema_id = s.schema_id `,
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
+        'IF EXISTS (SELECT * FROM sys.objects o ',
+        '           INNER JOIN sys.schemas s on o.schema_id = s.schema_id ',
         `           WHERE o.name = '${item.name}' and s.name = '${item.schema}')`,
         'BEGIN',
         `  DROP FUNCTION [${item.schema}].[${item.name}]`,
@@ -517,7 +562,6 @@ export function dropFunction(item: AbstractRecordSet): string {
     return output;
 }
 
-
 /**
  * Get script to drop existing constraint.
  *
@@ -526,7 +570,9 @@ export function dropFunction(item: AbstractRecordSet): string {
 export function dropConstraint(item: DefaultConstraintRecordSet): string {
     const objectId: string = `${item.schema}].[${item.table_name}`;
 
-    let output: string = [
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `IF EXISTS (SELECT * FROM sys.objects WHERE name = '${item.constraint_name}')`,
         'BEGIN',
         `  ALTER TABLE [${objectId}] DROP CONSTRAINT [${item.constraint_name}]`,
@@ -543,7 +589,9 @@ export function dropConstraint(item: DefaultConstraintRecordSet): string {
  * @param item Row from `sys.fulltext_catalogs` query.
  */
 export function dropFulltextCatalog(item: FullTextCatalogRecordSet): string {
-    let output: string = [
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `IF EXISTS (SELECT * FROM sys.fulltext_catalogs WHERE name = '${item.name}')`,
         `AND NOT EXISTS (SELECT * FROM sys.fulltext_catalogs c INNER JOIN sys.fulltext_indexes i on c.fulltext_catalog_id = i.fulltext_catalog_id WHERE c.name = '${item.name}')`,
         'BEGIN',
@@ -556,7 +604,7 @@ export function dropFulltextCatalog(item: FullTextCatalogRecordSet): string {
 }
 
 export function getStatement(item: ObjectRecordSet): string {
-    let output: string = [
+    const output: string = [
         item.text,
         'GO',
         EOL].join(EOL);
@@ -577,7 +625,7 @@ export function constraint(item: DefaultConstraintRecordSet): string {
 
     output += `ALTER TABLE [${objectId}] ADD CONSTRAINT [${item.constraint_name}] DEFAULT ${item.definition} FOR [${item.column_name}]`;
     output += EOL;
-    output += "GO";
+    output += 'GO';
     output += EOL;
     output += EOL;
 
@@ -590,14 +638,16 @@ export function constraint(item: DefaultConstraintRecordSet): string {
  * @param item Row from `sys.fulltext_catalog` query.
  */
 export function fullTextCatalog(item: FullTextCatalogRecordSet): string {
-  let output: string = [
-    `PRINT ('CREATING FULL TEXT CATALOG ${item.name}')`,
-    `IF NOT EXISTS (SELECT * FROM sys.fulltext_catalogs where name = '${item.name}')`,
-    'BEGIN',
-    `  CREATE FULLTEXT CATALOG [${item.name}] WITH ACCENT_SENSITIVITY = ${item.accent_sensitivity}`,
-    'END',
-    'GO',
-    EOL].join(EOL);
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
+        `PRINT ('CREATING FULL TEXT CATALOG ${item.name}')`,
+        `IF NOT EXISTS (SELECT * FROM sys.fulltext_catalogs where name = '${item.name}')`,
+        'BEGIN',
+        `  CREATE FULLTEXT CATALOG [${item.name}] WITH ACCENT_SENSITIVITY = ${item.accent_sensitivity}`,
+        'END',
+        'GO',
+        EOL].join(EOL);
 
     return output;
 }
@@ -608,11 +658,15 @@ export function fullTextCatalog(item: FullTextCatalogRecordSet): string {
  * @param item Row from `sys.fulltext_index` query.
  */
 export function fullTextIndex(item: FullTextIndexRecordSet): string {
-    let output: string = [
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `IF NOT EXISTS (SELECT * FROM sys.fulltext_indexes where object_id = object_id('${item.scheme}.${item.table_name}'))`,
         'BEGIN',
         `  ${item.sql_value}`,
         'END',
+        'GO',
+        `ALTER FULLTEXT INDEX ON ${item.scheme}.${item.table_name} ENABLE`,
         'GO',
         EOL].join(EOL);
 
@@ -620,7 +674,9 @@ export function fullTextIndex(item: FullTextIndexRecordSet): string {
 }
 
 export function dropFulltextIndex(item: FullTextIndexRecordSet): string {
-    let output: string = [
+    const output: string = [
+        'IF @@ERROR <> 0 SET NOEXEC ON',
+        'GO',
         `IF EXISTS (SELECT * FROM sys.fulltext_indexes where object_id = object_id('${item.scheme}.${item.table_name}'))`,
         'BEGIN',
         `  DROP FULLTEXT INDEX ON ${item.scheme}.${item.table_name}`,
@@ -638,29 +694,29 @@ export function dropFulltextIndex(item: FullTextIndexRecordSet): string {
  * @param stopWords Array of items from `sys.fulltext_stopwords` query.
  */
 export function fullTextStopList(item: FullTextStopListRecordSet, stopWords: FullTextStopWordRecordSet[]): string {
-    let words: FullTextStopWordRecordSet[] = stopWords.filter(a => a.stoplist_id == item.stoplist_id);
+    const words: FullTextStopWordRecordSet[] = stopWords.filter(a => a.stoplist_id === item.stoplist_id);
     let output: string = '';
 
     if (words.length > 0) {
+        output += `PRINT ('Creating full text stop list ${item.name}')`;
+        output += EOL;
+
         output += [
-            `IF EXISTS (SELECT * FROM sys.fulltext_stoplists WHERE name = '${item.name}')`,
+            `IF NOT EXISTS (SELECT * FROM sys.fulltext_stoplists WHERE name = '${item.name}')`,
             'BEGIN',
-            `  DROP FULLTEXT STOPLIST [${item.name}];`,
+            `   CREATE FULLTEXT STOPLIST [${item.name}];`,
             'END',
             'GO',
             EOL].join(EOL);
 
-        output += `PRINT ('Creating full text stop list ${item.name}')`;
-        output += EOL;
-
-        output += [`CREATE FULLTEXT STOPLIST [${item.name}]`,
-            ';',
-            EOL
-        ].join(EOL);
-
-        words.forEach(wordItem => { 
-            output += `ALTER FULLTEXT STOPLIST [${wordItem.name}] ADD '${wordItem.stopword}' LANGUAGE '${wordItem.language}';`;
-            output += EOL;
+        words.forEach(wordItem => {
+            output += [
+                `IF NOT EXISTS (SELECT * FROM sys.fulltext_stopwords a INNER JOIN sys.fulltext_stoplists b on a.stoplist_id = b.stoplist_id where b.name = '${item.name}' AND a.stopword = '${wordItem.stopword}' AND a.language = '${wordItem.language}')`,
+                'BEGIN',
+                `   ALTER FULLTEXT STOPLIST [${wordItem.name}] ADD '${wordItem.stopword}' LANGUAGE '${wordItem.language}';`,
+                'END',
+                'GO',
+                EOL].join(EOL);
         });
 
         output += 'GO';
@@ -676,7 +732,7 @@ export function fullTextStopList(item: FullTextStopListRecordSet, stopWords: Ful
  * @param synonyms Row from `sys.synonyms` query.
  */
 export function dropSynonyms(item: SynonymRecordSet): string {
-    let output: string = [
+    const output: string = [
         `IF EXISTS (SELECT * FROM sys.synonyms WHERE name = N'${item.name}' AND schema_id = SCHEMA_ID(N'${item.schema}'))`,
         'BEGIN',
         `  DROP SYNONYM [${item.schema}].[${item.name}]`,
@@ -693,9 +749,9 @@ export function dropSynonyms(item: SynonymRecordSet): string {
  * @param synonyms Row from `sys.synonyms` query.
  */
 export function synonym(item: SynonymRecordSet): string {
-    let output: string = [
+    const output: string = [
         `CREATE SYNONYM [${item.schema}].[${item.name}] FOR [{synonym_target}]${item.reference}`,
-        `GO`,
+        'GO',
         EOL].join(EOL);
 
     return output;
@@ -731,7 +787,7 @@ function index(item: IndexRecordSet): string {
       output += `(${item.columns})`;
 
       if (item.included_columns && item.included_columns.length > 0) {
-          output += ` INCLUDE (${item.included_columns})`
+          output += ` INCLUDE (${item.included_columns})`;
       }
 
       output += EOL;

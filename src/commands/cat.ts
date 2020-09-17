@@ -11,7 +11,19 @@ import * as util from '../common/utility';
 export function cat(): void {
   const start: [number, number] = process.hrtime();
   const config: Config = util.getConfig();
-  let output: string = util.getAllFilesContent();
+  const output: string = util.getAllFilesContent(true);
+
+  fs.outputFileSync(`${config.output.root}/cat.sql`, output);
+
+  const time: [number, number] = process.hrtime(start);
+  console.log(chalk.green(`Finished after ${time[0]}s!`));
+}
+
+
+export function clean(): void {
+  const start: [number, number] = process.hrtime();
+  const config: Config = util.getConfig();
+  const output: string = util.getAllFilesContentFull();
 
   fs.outputFileSync(`${config.output.root}/cat.sql`, output);
 

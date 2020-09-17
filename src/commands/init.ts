@@ -122,7 +122,7 @@ export function init(options: InitOptions): void {
           database: answers.database,
           user: answers.user,
           password: answers.password,
-          synonym_target: ""
+          synonymTarget: ''
         })]
       });
     } else {
@@ -134,7 +134,7 @@ export function init(options: InitOptions): void {
           database: answers.database,
           user: answers.user,
           password: answers.password,
-          synonym_target: ""
+          synonymTarget: ''
         })]
       });
     }

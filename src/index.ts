@@ -2,7 +2,7 @@ import * as program from 'commander';
 import * as updateNotifier from 'update-notifier';
 
 import pkg = require('../package.json');
-import { cat } from './commands/cat';
+import { cat, clean } from './commands/cat';
 import { conns } from './commands/conns';
 import { init } from './commands/init';
 import { pull } from './commands/pull';
@@ -36,9 +36,16 @@ program
 
 program
   .command('cat')
-  .description('Concatenate all SQL files into a single file.')
+  .description('Concatenate all SQL files into a single transactional file.')
   .action(cat);
+
+program
+  .command('clean')
+  .description('Concatenate all SQL files into a single ')
+  .action(clean)
 
 program
   .version((pkg as any).version)
   .parse(process.argv);
+
+
